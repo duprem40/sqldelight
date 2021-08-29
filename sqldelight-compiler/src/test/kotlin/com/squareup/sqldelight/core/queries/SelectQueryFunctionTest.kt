@@ -286,9 +286,7 @@ class SelectQueryFunctionTest {
     assertThat(generator.querySubtype().toString()).isEqualTo(
       """
       |private inner class SelectForIdQuery<out T : kotlin.Any>(
-      |  @kotlin.jvm.JvmField
       |  public val good: kotlin.collections.Collection<kotlin.Long>,
-      |  @kotlin.jvm.JvmField
       |  public val bad: kotlin.collections.Collection<kotlin.Long>,
       |  mapper: (com.squareup.sqldelight.db.SqlCursor) -> T
       |) : com.squareup.sqldelight.Query<T>(selectForId, mapper) {
@@ -403,7 +401,6 @@ class SelectQueryFunctionTest {
     assertThat(generator.querySubtype().toString()).isEqualTo(
       """
       |private inner class EquivalentNamesNamedQuery<out T : kotlin.Any>(
-      |  @kotlin.jvm.JvmField
       |  public val name: kotlin.String,
       |  mapper: (com.squareup.sqldelight.db.SqlCursor) -> T
       |) : com.squareup.sqldelight.Query<T>(equivalentNamesNamed, mapper) {
@@ -1292,6 +1289,36 @@ class SelectQueryFunctionTest {
     )
   }
 
+  @Test fun `is not null has correct type`() {
+    val file = FixtureCompiler.parseSql(
+      """
+      |CREATE TABLE test (
+      |  stuff INTEGER
+      |);
+      |
+      |someSelect:
+      |SELECT stuff
+      |FROM test
+      |WHERE stuff IS NOT NULL;
+      |""".trimMargin(),
+      tempFolder
+    )
+
+    val query = file.namedQueries.first()
+    val generator = SelectQueryGenerator(query)
+    assertThat(generator.customResultTypeFunction().toString()).isEqualTo(
+      """
+      |public override fun someSelect(): com.squareup.sqldelight.Query<kotlin.Long> = com.squareup.sqldelight.Query(-602300915, someSelect, driver, "Test.sq", "someSelect", ""${'"'}
+      ||SELECT stuff
+      ||FROM test
+      ||WHERE stuff IS NOT NULL
+      |""${'"'}.trimMargin()) { cursor ->
+      |  cursor.getLong(0)!!
+      |}
+      |""".trimMargin()
+    )
+  }
+
   @Test fun `division has correct type`() {
     val file = FixtureCompiler.parseSql(
       """
@@ -1581,6 +1608,27 @@ class SelectQueryFunctionTest {
       |    id,
       |    name
       |  )
+      |}
+      |""".trimMargin()
+    )
+  }
+
+  @Test fun `if return type computes correctly`() {
+    val file = FixtureCompiler.parseSql(
+      """
+      |selectIf:
+      |SELECT IF(1 == 1, 'yes', 'no');
+      """.trimMargin(),
+      tempFolder, dialectPreset = DialectPreset.MYSQL
+    )
+
+    val query = file.namedQueries.first()
+    val generator = SelectQueryGenerator(query)
+
+    assertThat(generator.customResultTypeFunction().toString()).isEqualTo(
+      """
+      |public override fun selectIf(): com.squareup.sqldelight.Query<kotlin.String> = com.squareup.sqldelight.Query(${query.id}, selectIf, driver, "Test.sq", "selectIf", "SELECT IF(1 == 1, 'yes', 'no')") { cursor ->
+      |  cursor.getString(0)!!
       |}
       |""".trimMargin()
     )
